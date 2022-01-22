@@ -12,7 +12,7 @@ mov sp, 0x7c00 ; stack grows downwards from 0x7C00
 mov bp, sp
 
 ; loading another sector from disk
-mov al, 1 ; read 1 sector
+mov al, ((end - additional_sectors) / 512) ; read n sectors
 mov cl, 2 ; sector number
 mov ch, 0 ; cylinder number
 mov dh, 0 ; head number
@@ -25,69 +25,136 @@ mov ah, 2 ; read sector command
 int 0x13
 ;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;mov bx, string
-;call print_string
+call main
+jmp $
 
-mov ah, 0
-mov al, 0x13
-int 0x10
-
-;mov ax, 0xA000
-;mov es, ax
-
-mov ax, 0
-
-loop:
-
-	cmp ax, 1000
-	je end
-
-	;mov byte [eax], 0x77
-
-	mov bh, 0 ; page 0
-	mov cx, 100 ; x
-	mov dx, 100 ; y
-	mov al, 0xf ; index of color
-
-	mov ah, 0xc
-	int 0x10
-
-	inc ax
-	jmp loop
-
-end:
-	jmp $
-
-;;;;;;
+;;;;;; vars ;;;;;
 
 boot_disk: db 0
 
-;;;;;;;
+;;;;;;; boot sector padding ;;;;;;;
 
 times 510-($-$$) db 0
 db 0x55, 0xaa ; boot sector magic number
 
-; SECTOR 2
-sector_2:
-	string: db "Hello, World!", 0xA, 0xD, 0
+;;;;;;;;;;;; ADDITIONAL SECTORS ;;;;;;;;;;;;;
+additional_sectors:
 
-	print_string:
+;; MAIN
+main:
+	
+	loop1:
+	mov ah, 0
+	int 0x1a
+	
+	mov ax, dx
+	call print_int
+	
+	mov ah, 0xe
+	mov al, 0xa
+	int 0x10
+	mov al, 0xd
+	int 0x10
+	
+	jmp loop1
+	
+	;mov ah, 0xe
+	;mov al, dh
+	;int 0x10
+	
+	jmp $
+	
+	call init_vga
 
+loop:
+
+	call clearScreen
+	mov cx, [x_pos]
+	mov dx, 100
+	mov si, 50
+	mov di, 50
+	mov al, 0xf
+	call drawBox
+
+	inc word [x_pos]
+
+	jmp loop
+
+;;;;;; VARS ;;;;;;;
+
+    x_pos: dw 0
+       dt: dw 0
+last_time: dw 0
+
+;;;;;; FUNCS ;;;;;;
+
+; print int
+print_int:
+	cmp ax, 0
+	je .print_int_end
+
+	mov dx, 0
+	mov bx, 10
+	div bx
+
+	pusha
+	call print_int
+	popa
+
+	mov ah, 0xe
+	mov al, dl
+	add al, '0'
+	int 0x10
+
+	jmp .print_int_end_end
+	.print_int_end:
 		mov ah, 0xe
+		mov al, '0'
+		int 0x10
+	.print_int_end_end:
+		ret
 
-		print_string_loop:
-			mov al, [bx] 
-			cmp al, 0
-			je print_string_end
+; VGA mode
+init_vga:
+	mov ah, 0
+	mov al, 0x13
+	int 0x10
+	ret
 
-			int 0x10
-			
-			inc word bx
+; Draw Box
+;cx = xpos , dx = ypos, si = x-length, di = y-length, al = color
+drawBox:
+	push si               ;save x-length
+	.for_x:
+		push di           ;save y-length
+		.for_y:
+			pusha
+			mov bh, 0     ;page number (0 is default)
+			add cx, si    ;cx = x-coordinate
+			add dx, di    ;dx = y-coordinate
+			mov ah, 0xC   ;write pixel at coordinate
+			int 0x10      ;draw pixel!
+			popa
+		sub di, 1         ;decrease di by one and set flags
+		jnz .for_y        ;repeat for y-length times
+		pop di            ;restore di to y-length
+	sub si, 1             ;decrease si by one and set flags
+	jnz .for_x            ;repeat for x-length times
+	pop si                ;restore si to x-length  -> starting state restored
+	ret
 
-			jmp print_string_loop
+; Clear Screen
+clearScreen:
+	mov cx, 0
+	mov dx, 0
+	mov si, 320
+	mov di, 200
+	mov al, 0
+	call drawBox
+	ret
 
-		print_string_end:
-			ret
+;;;;;;;;;;;; SECTORS PADDING ;;;;;;;;;;;;;;
+	times 512 - (($-additional_sectors) % 512) db 0
+end:
 
-	times 512-($-sector_2) db 0
 
