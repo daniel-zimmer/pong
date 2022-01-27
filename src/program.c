@@ -80,7 +80,46 @@ void clear_screen() {
 	}
 }
 
+int pos = 0;
+long addr = 0xb8000;
+
+void print_char(char c) {
+	*(char *)(addr + pos) = c;
+	pos+=2;
+}
+
+void print_int(int i) {
+
+	if (i == 0) { return; }
+
+	print_int(i/10);
+	*(char *)(addr + pos) = i%10 + '0';
+	pos+=2;
+
+}
+
+
+char w_pressed = 0;
+char s_pressed = 0;
 void main() {
+
+	unsigned char c;
+	unsigned char old_c = 0;
+
+//	for (;;) {
+//
+//		c = inb(0x60);
+//
+//		if (c != 250 && c != old_c) {
+//			print_int(c);
+//	
+//			print_char(' ');
+//
+//			old_c = c;
+//		}
+//	}
+
+//	return;
 	int x = 0;
 	int y = 0;
 	for (;;) {
